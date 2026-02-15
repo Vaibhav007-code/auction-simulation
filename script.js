@@ -19,12 +19,10 @@ async function initFirebase() {
     try {
         console.log('📦 Initializing Firebase...');
         
-        // Check if Firebase is loaded
         if (typeof firebase === 'undefined') {
             throw new Error('Firebase SDK not loaded');
         }
         
-        // Initialize Firebase app if not already initialized
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -38,14 +36,19 @@ async function initFirebase() {
         // Listen for real-time updates
         dataRef.on('value', (snapshot) => {
             const cloudData = snapshot.val();
+            console.log('📡 Firebase data received:', cloudData ? 'Data exists' : 'No data');
+            
             if (cloudData && !AppState.isInteracting && !AppState.isModalOpen) {
-                console.log('📡 Real-time update from Firebase');
                 const hasChanges = JSON.stringify(AppState.data) !== JSON.stringify(cloudData);
                 
                 if (hasChanges) {
+                    console.log('🔄 Data changed, updating...');
+                    console.log('📊 Teams count:', cloudData.teams ? cloudData.teams.length : 0);
+                    
                     AppState.data = { ...AppState.data, ...cloudData };
                     localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(cloudData));
                     
+                    // Re-render appropriate view
                     const view = getViewFromURL();
                     if (view === 'display') {
                         renderDisplayView();
@@ -53,25 +56,35 @@ async function initFirebase() {
                         renderOwnerView();
                     } else if (AppState.user && AppState.user.role === 'admin') {
                         renderAdminView();
+                    } else {
+                        // IMPORTANT: Re-render login page to show updated teams!
+                        console.log('🔄 Re-rendering login page with updated teams...');
+                        renderLogin();
                     }
                 }
             }
         });
         
         // Load initial data from Firebase
+        console.log('📥 Loading initial data from Firebase...');
         const snapshot = await dataRef.once('value');
         const firebaseData = snapshot.val();
+        
         if (firebaseData) {
-            console.log('📥 Initial data loaded from Firebase');
+            console.log('✅ Initial data loaded!');
+            console.log('📊 Teams:', firebaseData.teams ? firebaseData.teams.length : 0);
+            console.log('👥 Players:', firebaseData.players ? firebaseData.players.length : 0);
+            
             AppState.data = { ...AppState.data, ...firebaseData };
             localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(firebaseData));
+        } else {
+            console.log('ℹ️ No existing data in Firebase, starting fresh');
         }
         
         return true;
     } catch (error) {
         console.error('❌ Firebase error:', error);
         firebaseReady = false;
-        showToast('Running in offline mode', 'error');
         return false;
     }
 }
@@ -137,7 +150,8 @@ const AppState = {
         customIncrementUnit: 'L'
     },
     isInteracting: false,
-    isModalOpen: false
+    isModalOpen: false,
+    isLoading: true
 };
 
 let refreshInterval = null;
@@ -222,10 +236,53 @@ function getIncrementDisplay(value, unit) {
 
 // ==================== INITIALIZATION ====================
 async function init() {
+    console.log('🚀 Initializing IPL Auction App...');
+    
+    // Show loading screen
+    renderLoadingScreen();
+    
     createParticles();
     loadData();
+    
+    // Wait for Firebase to initialize and load data
     await initFirebase();
+    
+    AppState.isLoading = false;
     checkAuth();
+    
+    console.log('✅ App initialized!');
+    console.log('📊 Current teams:', AppState.data.teams.length);
+}
+
+function renderLoadingScreen() {
+    document.getElementById('app').innerHTML = `
+        <div class="login-screen">
+            <div class="login-box" style="text-align: center;">
+                <div class="ipl-logo-container">
+                    <img src="${IPL_LOGO}" alt="IPL Logo" class="ipl-logo">
+                </div>
+                <div class="login-title">🏆 IPL AUCTION ${CONFIG.YEAR}</div>
+                <div style="margin: 2rem 0;">
+                    <div class="loading-spinner"></div>
+                    <p style="color: var(--text-secondary); margin-top: 1rem;">Loading auction data...</p>
+                </div>
+            </div>
+        </div>
+        <style>
+            .loading-spinner {
+                width: 50px;
+                height: 50px;
+                border: 4px solid rgba(20, 184, 166, 0.2);
+                border-top-color: var(--primary);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin: 0 auto;
+            }
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        </style>
+    `;
 }
 
 function createParticles() {
@@ -258,6 +315,7 @@ function loadData() {
             if (!AppState.data.accessRequests) {
                 AppState.data.accessRequests = {};
             }
+            console.log('💾 Loaded from localStorage - Teams:', AppState.data.teams.length);
         }
     } catch (e) {
         console.error('Error loading data:', e);
@@ -273,6 +331,8 @@ async function saveData() {
         if (firebaseReady && dataRef) {
             await dataRef.set(AppState.data);
             console.log('☁️ Synced to Firebase!');
+        } else {
+            console.warn('⚠️ Firebase not ready, data saved only locally');
         }
     } catch (e) {
         console.error('Error saving data:', e);
@@ -286,16 +346,21 @@ function checkAuth() {
         const savedUser = sessionStorage.getItem(CONFIG.SESSION_KEY);
         if (savedUser) {
             AppState.user = JSON.parse(savedUser);
+            console.log('👤 User session found:', AppState.user.role);
             renderApp();
         } else {
+            console.log('👤 No user session, showing login');
             renderLogin();
         }
     } catch (e) {
+        console.error('Auth error:', e);
         renderLogin();
     }
 }
 
 function login(role, password, teamName = null) {
+    console.log('🔐 Login attempt:', role, teamName || '');
+    
     if (role === 'admin') {
         if (password === CONFIG.ADMIN_PASSWORD) {
             AppState.user = { role: 'admin' };
@@ -308,6 +373,10 @@ function login(role, password, teamName = null) {
             return false;
         }
     } else if (role === 'owner') {
+        console.log('🔍 Checking team password for:', teamName);
+        console.log('📋 Available teams:', AppState.data.teams.map(t => t.name));
+        console.log('🔑 Team passwords:', Object.keys(AppState.data.teamPasswords || {}));
+        
         const teamPassword = AppState.data.teamPasswords[teamName];
         if (teamPassword && teamPassword === password) {
             AppState.user = { role: 'owner', team: teamName };
@@ -316,6 +385,7 @@ function login(role, password, teamName = null) {
             renderApp();
             return true;
         } else {
+            console.log('❌ Password mismatch. Expected:', teamPassword, 'Got:', password);
             showToast('Invalid team password!', 'error');
             return false;
         }
@@ -479,10 +549,11 @@ function switchView(view) {
 
 // ==================== SYNC STATUS INDICATOR ====================
 function renderSyncIndicator() {
+    const teamsCount = AppState.data.teams ? AppState.data.teams.length : 0;
     return `
         <div style="position: fixed; bottom: 20px; right: 20px; background: ${firebaseReady ? 'rgba(34, 197, 94, 0.9)' : 'rgba(251, 146, 60, 0.9)'}; color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 8px;">
             <span style="width: 8px; height: 8px; background: ${firebaseReady ? '#22c55e' : '#fbbf24'}; border-radius: 50%; animation: pulse 2s infinite;"></span>
-            <span>${firebaseReady ? '🔥 Live Sync Active' : '⚠️ Offline Mode'}</span>
+            <span>${firebaseReady ? `🔥 Live Sync (${teamsCount} teams)` : '⚠️ Offline Mode'}</span>
         </div>
         <style>
             @keyframes pulse {
@@ -495,9 +566,22 @@ function renderSyncIndicator() {
 
 // ==================== LOGIN VIEW ====================
 function renderLogin() {
-    const teamsOptions = AppState.data.teams.map(t => 
+    console.log('🎨 Rendering login page...');
+    console.log('📊 Teams available:', AppState.data.teams.length);
+    
+    const teams = AppState.data.teams || [];
+    const teamsOptions = teams.map(t => 
         `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`
     ).join('');
+    
+    const noTeamsMessage = teams.length === 0 ? `
+        <div style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; text-align: center;">
+            <div style="color: var(--warning); font-weight: 600;">⚠️ No Teams Available</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
+                Ask your admin to create teams first, or login as admin to add teams.
+            </div>
+        </div>
+    ` : '';
 
     document.getElementById('app').innerHTML = `
         <div class="login-screen">
@@ -531,22 +615,28 @@ function renderLogin() {
                 </div>
 
                 <div id="ownerTab" style="display: none;">
+                    ${noTeamsMessage}
                     <form onsubmit="window.handleOwnerLogin(event)">
                         <div class="form-group">
-                            <label class="form-label">🏏 Select Team</label>
-                            <select class="form-select" id="ownerTeam" required>
+                            <label class="form-label">🏏 Select Team (${teams.length} available)</label>
+                            <select class="form-select" id="ownerTeam" required ${teams.length === 0 ? 'disabled' : ''}>
                                 <option value="">Choose your team...</option>
                                 ${teamsOptions}
                             </select>
                         </div>
                         <div class="form-group">
                             <label class="form-label">🔐 Team Password</label>
-                            <input type="password" class="form-input" id="ownerPassword" required placeholder="Enter team password">
+                            <input type="password" class="form-input" id="ownerPassword" required placeholder="Enter team password" ${teams.length === 0 ? 'disabled' : ''}>
                         </div>
-                        <button type="submit" class="btn btn-success" style="width: 100%;">
+                        <button type="submit" class="btn btn-success" style="width: 100%;" ${teams.length === 0 ? 'disabled' : ''}>
                             Login as Team Owner
                         </button>
                     </form>
+                    ${teams.length === 0 ? `
+                        <button class="btn btn-secondary" onclick="window.refreshTeams()" style="width: 100%; margin-top: 1rem;">
+                            🔄 Refresh Teams
+                        </button>
+                    ` : ''}
                 </div>
 
                 <div class="login-divider">or</div>
@@ -563,6 +653,32 @@ function renderLogin() {
         ${renderSyncIndicator()}
     `;
 }
+
+window.refreshTeams = async function() {
+    showToast('Refreshing teams...', 'info');
+    if (firebaseReady && dataRef) {
+        try {
+            const snapshot = await dataRef.once('value');
+            const firebaseData = snapshot.val();
+            if (firebaseData) {
+                AppState.data = { ...AppState.data, ...firebaseData };
+                localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(firebaseData));
+                console.log('🔄 Teams refreshed:', AppState.data.teams.length);
+            }
+            renderLogin();
+            if (AppState.data.teams.length > 0) {
+                showToast(`Found ${AppState.data.teams.length} teams! 🎉`);
+            } else {
+                showToast('No teams found yet', 'error');
+            }
+        } catch (e) {
+            console.error('Refresh error:', e);
+            showToast('Refresh failed!', 'error');
+        }
+    } else {
+        showToast('Firebase not connected!', 'error');
+    }
+};
 
 window.switchLoginTab = function(tab) {
     document.getElementById('adminTabBtn').classList.toggle('active', tab === 'admin');
@@ -777,6 +893,8 @@ function renderTeamsOverview() {
     const teamsHTML = AppState.data.teams.map(team => {
         const stats = getTeamStats(team.name);
         const logoUrl = getTeamLogo(team.name);
+        const teamPassword = AppState.data.teamPasswords[team.name] || 'Not set';
+        
         return `
             <div class="team-card">
                 ${logoUrl ? `<div class="team-logo-container"><img src="${logoUrl}" alt="${escapeHtml(team.name)}" class="team-logo" onerror="this.style.display='none'"></div>` : ''}
@@ -798,6 +916,10 @@ function renderTeamsOverview() {
                         <span class="team-stat-label">Players</span>
                         <span class="team-stat-value">${stats.playerCount}</span>
                     </div>
+                    <div class="team-stat-row">
+                        <span class="team-stat-label">Password</span>
+                        <span class="team-stat-value" style="font-family: monospace; font-size: 0.8rem;">${escapeHtml(teamPassword)}</span>
+                    </div>
                 </div>
                 <div class="team-actions">
                     <button class="btn-action view" onclick="window.viewTeamDetails('${escapeAttr(team.name)}')">👁 View</button>
@@ -809,7 +931,7 @@ function renderTeamsOverview() {
     
     return `
         <div class="card">
-            <div class="card-header">🏏 Teams Overview</div>
+            <div class="card-header">🏏 Teams Overview (${AppState.data.teams.length})</div>
             <div class="teams-grid">${teamsHTML}</div>
         </div>
     `;
@@ -1240,6 +1362,7 @@ function renderOwnerView() {
                     <div class="empty-state">
                         <div class="empty-icon">❌</div>
                         <div class="empty-title">Team Not Found</div>
+                        <p>Your team may have been deleted.</p>
                         <button class="btn btn-danger" onclick="window.logout()">Logout</button>
                     </div>
                 </div>
@@ -1741,6 +1864,10 @@ window.addTeam = function(e) {
     const purseLakhs = parseAmountToLakhs(purseValue, purseUnit);
     AppState.data.teams.push({ name, initialPurse: purseLakhs });
     AppState.data.teamPasswords[name] = password;
+    
+    console.log('✅ Team added:', name, 'Password:', password);
+    console.log('📊 Total teams now:', AppState.data.teams.length);
+    
     saveData();
     showToast(`${name} added with ${formatMoney(purseLakhs)} purse! 🎉`);
     AppState.isInteracting = false;
@@ -1835,10 +1962,11 @@ function resetAll() {
 // ==================== EXPORT ====================
 window.exportToCSV = function() {
     let csv = `IPL AUCTION ${CONFIG.YEAR} - IILM University Greater Noida\n\n`;
-    csv += 'TEAMS\nName,Initial Purse,Spent,Remaining,Players\n';
+    csv += 'TEAMS\nName,Initial Purse,Spent,Remaining,Players,Password\n';
     AppState.data.teams.forEach(t => {
         const s = getTeamStats(t.name);
-        csv += `${t.name},${formatMoney(s.initialPurse)},${formatMoney(s.spent)},${formatMoney(s.remaining)},${s.playerCount}\n`;
+        const pwd = AppState.data.teamPasswords[t.name] || '';
+        csv += `${t.name},${formatMoney(s.initialPurse)},${formatMoney(s.spent)},${formatMoney(s.remaining)},${s.playerCount},${pwd}\n`;
     });
     csv += '\nPLAYERS\nName,Team,Role,Price,Added By\n';
     AppState.data.players.forEach(p => {
