@@ -17,10 +17,14 @@ let firebaseReady = false;
 // ==================== FIREBASE INITIALIZATION ====================
 async function initFirebase() {
     try {
-        console.log('📦 Loading Firebase...');
-        await loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
-        await loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js');
+        console.log('📦 Initializing Firebase...');
         
+        // Check if Firebase is loaded
+        if (typeof firebase === 'undefined') {
+            throw new Error('Firebase SDK not loaded');
+        }
+        
+        // Initialize Firebase app if not already initialized
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -47,12 +51,14 @@ async function initFirebase() {
                         renderDisplayView();
                     } else if (AppState.user && AppState.user.role === 'owner') {
                         renderOwnerView();
+                    } else if (AppState.user && AppState.user.role === 'admin') {
+                        renderAdminView();
                     }
                 }
             }
         });
         
-        // Load initial data
+        // Load initial data from Firebase
         const snapshot = await dataRef.once('value');
         const firebaseData = snapshot.val();
         if (firebaseData) {
@@ -70,22 +76,6 @@ async function initFirebase() {
     }
 }
 
-function loadScript(src) {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = src;
-        script.onload = () => {
-            console.log(`✅ Loaded: ${src}`);
-            resolve();
-        };
-        script.onerror = () => {
-            console.error(`❌ Failed to load: ${src}`);
-            reject(new Error(`Failed to load ${src}`));
-        };
-        document.head.appendChild(script);
-    });
-}
-
 const CONFIG = {
     ADMIN_PASSWORD: 'admin2026',
     AUTO_REFRESH_INTERVAL: 2000,
@@ -96,7 +86,6 @@ const CONFIG = {
 
 // ==================== TEAM LOGOS ====================
 const TEAM_LOGOS = {
-    // IPL Teams with official logos (FIXED Mumbai Indians URL)
     'Mumbai Indians': 'https://bcciplayerimages.s3.ap-south-1.amazonaws.com/ipl/MI/Logos/Logooutline/MIoutline.png',
     'Chennai Super Kings': 'https://documents.iplt20.com/ipl/CSK/Logos/Logooutline/CSKoutline.png',
     'Royal Challengers Bangalore': 'https://documents.iplt20.com/ipl/RCB/Logos/Logooutline/RCBoutline.png',
@@ -108,8 +97,6 @@ const TEAM_LOGOS = {
     'Sunrisers Hyderabad': 'https://documents.iplt20.com/ipl/SRH/Logos/Logooutline/SRHoutline.png',
     'Gujarat Titans': 'https://documents.iplt20.com/ipl/GT/Logos/Logooutline/GToutline.png',
     'Lucknow Super Giants': 'https://documents.iplt20.com/ipl/LSG/Logos/Logooutline/LSGoutline.png',
-    
-    // Shortened names
     'MI': 'https://bcciplayerimages.s3.ap-south-1.amazonaws.com/ipl/MI/Logos/Logooutline/MIoutline.png',
     'CSK': 'https://documents.iplt20.com/ipl/CSK/Logos/Logooutline/CSKoutline.png',
     'RCB': 'https://documents.iplt20.com/ipl/RCB/Logos/Logooutline/RCBoutline.png',
@@ -125,30 +112,14 @@ const TEAM_LOGOS = {
 const IPL_LOGO = 'https://www.iplt20.com/assets/images/ipl-logo-new-old.png';
 const IILM_LOGO = 'https://iilm.ac.in/uploads/all/1/dbcb.png';
 
-// Function to get team logo
 function getTeamLogo(teamName) {
     if (!teamName) return null;
-    
-    // Try exact match first
-    if (TEAM_LOGOS[teamName]) {
-        return TEAM_LOGOS[teamName];
-    }
-    
-    // Try case-insensitive match
-    const teamKey = Object.keys(TEAM_LOGOS).find(
-        key => key.toLowerCase() === teamName.toLowerCase()
-    );
-    
-    if (teamKey) {
-        return TEAM_LOGOS[teamKey];
-    }
-    
-    // Try partial match
+    if (TEAM_LOGOS[teamName]) return TEAM_LOGOS[teamName];
+    const teamKey = Object.keys(TEAM_LOGOS).find(key => key.toLowerCase() === teamName.toLowerCase());
+    if (teamKey) return TEAM_LOGOS[teamKey];
     const partialMatch = Object.keys(TEAM_LOGOS).find(
-        key => key.toLowerCase().includes(teamName.toLowerCase()) || 
-               teamName.toLowerCase().includes(key.toLowerCase())
+        key => key.toLowerCase().includes(teamName.toLowerCase()) || teamName.toLowerCase().includes(key.toLowerCase())
     );
-    
     return partialMatch ? TEAM_LOGOS[partialMatch] : null;
 }
 
@@ -183,7 +154,6 @@ function croresToLakhs(crores) {
 function parseAmountToLakhs(value, unit) {
     const num = parseFloat(value);
     if (isNaN(num)) return 0;
-    
     switch(unit) {
         case 'K': return num / 100;
         case 'L': return num;
@@ -194,13 +164,9 @@ function parseAmountToLakhs(value, unit) {
 
 function formatMoney(lakhs, forceUnit = null) {
     if (lakhs === 0) return '₹0';
-    
     const absLakhs = Math.abs(lakhs);
-    
     if (forceUnit === 'L' || (absLakhs < 100 && forceUnit !== 'Cr')) {
-        if (absLakhs < 1) {
-            return `₹${(lakhs * 1000).toFixed(0)}K`;
-        }
+        if (absLakhs < 1) return `₹${(lakhs * 1000).toFixed(0)}K`;
         return `₹${lakhs.toFixed(lakhs % 1 === 0 ? 0 : 2)} L`;
     } else {
         const crores = lakhs / 100;
@@ -210,13 +176,9 @@ function formatMoney(lakhs, forceUnit = null) {
 
 function formatMoneyShort(lakhs) {
     if (lakhs === 0) return '₹0';
-    
     const absLakhs = Math.abs(lakhs);
-    
     if (absLakhs < 100) {
-        if (absLakhs < 1) {
-            return `${(lakhs * 100).toFixed(0)}K`;
-        }
+        if (absLakhs < 1) return `${(lakhs * 100).toFixed(0)}K`;
         return `${lakhs.toFixed(lakhs % 1 === 0 ? 0 : 1)}L`;
     } else {
         const crores = lakhs / 100;
@@ -226,9 +188,7 @@ function formatMoneyShort(lakhs) {
 
 function formatMoneyDisplay(lakhs) {
     if (lakhs === 0) return '₹0';
-    
     const absLakhs = Math.abs(lakhs);
-    
     if (absLakhs < 1) {
         const thousands = lakhs * 100;
         return `₹${thousands.toFixed(0)} Thousand`;
@@ -242,9 +202,7 @@ function formatMoneyDisplay(lakhs) {
 
 function formatBidAmount(lakhs) {
     if (lakhs === 0) return '₹0';
-    
     const absLakhs = Math.abs(lakhs);
-    
     if (absLakhs < 100) {
         return `₹${lakhs.toFixed(lakhs % 1 === 0 ? 0 : 2)} L`;
     } else {
@@ -255,9 +213,7 @@ function formatBidAmount(lakhs) {
 
 function getIncrementDisplay(value, unit) {
     if (unit === 'L') {
-        if (value < 1) {
-            return `${(value * 100).toFixed(0)}K`;
-        }
+        if (value < 1) return `${(value * 100).toFixed(0)}K`;
         return `${value}L`;
     } else {
         return `${value}Cr`;
@@ -275,9 +231,7 @@ async function init() {
 function createParticles() {
     const container = document.getElementById('particles');
     if (!container) return;
-    
     const colors = ['rgba(20, 184, 166, 0.3)', 'rgba(249, 115, 22, 0.3)', 'rgba(6, 182, 212, 0.3)'];
-    
     for (let i = 0; i < 15; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
@@ -301,7 +255,6 @@ function loadData() {
         if (saved) {
             const parsed = JSON.parse(saved);
             AppState.data = { ...AppState.data, ...parsed };
-            
             if (!AppState.data.accessRequests) {
                 AppState.data.accessRequests = {};
             }
@@ -311,7 +264,6 @@ function loadData() {
     }
 }
 
-// ==================== FIXED: Removed duplicate catch block ====================
 async function saveData() {
     try {
         const dataToSave = JSON.stringify(AppState.data);
@@ -384,12 +336,10 @@ function requestAccess(teamName) {
     if (!AppState.data.accessRequests) {
         AppState.data.accessRequests = {};
     }
-    
     AppState.data.accessRequests[teamName] = {
         status: 'pending',
         requestedAt: new Date().toISOString()
     };
-    
     saveData();
     showToast('Access request sent! ⏳');
     renderOwnerView();
@@ -460,18 +410,10 @@ function escapeAttr(text) {
 function getTeamStats(teamName) {
     const team = AppState.data.teams.find(t => t.name === teamName);
     if (!team) return { spent: 0, remaining: 0, playerCount: 0, players: [], initialPurse: 0 };
-    
     const players = AppState.data.players.filter(p => p.team === teamName);
     const spent = players.reduce((sum, p) => sum + parseFloat(p.price), 0);
     const remaining = parseFloat(team.initialPurse) - spent;
-    
-    return { 
-        spent, 
-        remaining, 
-        playerCount: players.length, 
-        players,
-        initialPurse: parseFloat(team.initialPurse)
-    };
+    return { spent, remaining, playerCount: players.length, players, initialPurse: parseFloat(team.initialPurse) };
 }
 
 function calculateTotalSpent() {
@@ -488,7 +430,6 @@ function getHighestBid() {
 // ==================== RENDERING ====================
 function renderApp() {
     const view = getViewFromURL();
-    
     if (view === 'display') {
         renderDisplayView();
         startAutoRefresh();
@@ -506,10 +447,7 @@ function renderApp() {
 function startAutoRefresh() {
     stopAutoRefresh();
     refreshInterval = setInterval(() => {
-        if (AppState.isInteracting || AppState.isModalOpen) {
-            return;
-        }
-        
+        if (AppState.isInteracting || AppState.isModalOpen) return;
         loadData();
         const view = getViewFromURL();
         if (view === 'display') {
@@ -538,7 +476,6 @@ function getViewFromURL() {
 function switchView(view) {
     window.location.href = `?view=${view}`;
 }
-
 
 // ==================== SYNC STATUS INDICATOR ====================
 function renderSyncIndicator() {
@@ -623,12 +560,10 @@ function renderLogin() {
                 </div>
             </div>
         </div>
-    
         ${renderSyncIndicator()}
     `;
 }
 
-// FIXED: Added window. prefix to make functions globally accessible
 window.switchLoginTab = function(tab) {
     document.getElementById('adminTabBtn').classList.toggle('active', tab === 'admin');
     document.getElementById('ownerTabBtn').classList.toggle('active', tab === 'owner');
@@ -689,7 +624,6 @@ function renderAdminView() {
             ${renderAllPlayers()}
             ${renderDangerZone()}
         </div>
-    
         ${renderSyncIndicator()}
     `;
 }
@@ -697,10 +631,7 @@ function renderAdminView() {
 // ==================== ACCESS REQUESTS SECTION ====================
 function renderAccessRequestsSection(pending, approved) {
     const hasAnyRequests = pending.length > 0 || approved.length > 0;
-    
-    if (!hasAnyRequests) {
-        return '';
-    }
+    if (!hasAnyRequests) return '';
     
     return `
         <div class="card warning-card">
@@ -778,9 +709,7 @@ function renderStatsGrid() {
 // ==================== MOST EXPENSIVE ====================
 function renderMostExpensive() {
     if (AppState.data.players.length === 0) return '';
-    
     const most = [...AppState.data.players].sort((a, b) => parseFloat(b.price) - parseFloat(a.price))[0];
-    
     return `
         <div class="card">
             <div class="highlight-box">
@@ -848,14 +777,9 @@ function renderTeamsOverview() {
     const teamsHTML = AppState.data.teams.map(team => {
         const stats = getTeamStats(team.name);
         const logoUrl = getTeamLogo(team.name);
-        
         return `
             <div class="team-card">
-                ${logoUrl ? `
-                    <div class="team-logo-container">
-                        <img src="${logoUrl}" alt="${escapeHtml(team.name)}" class="team-logo" onerror="this.style.display='none'">
-                    </div>
-                ` : ''}
+                ${logoUrl ? `<div class="team-logo-container"><img src="${logoUrl}" alt="${escapeHtml(team.name)}" class="team-logo" onerror="this.style.display='none'"></div>` : ''}
                 <div class="team-name">${escapeHtml(team.name)}</div>
                 <div class="team-stats">
                     <div class="team-stat-row">
@@ -907,7 +831,6 @@ function renderAllPlayers() {
     }
     
     const sorted = [...AppState.data.players].sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-    
     return `
         <div class="card">
             <div class="card-header">
@@ -1004,7 +927,6 @@ function renderLiveBiddingArena() {
     const customInc = AppState.data.customIncrement || 10;
     const customUnit = AppState.data.customIncrementUnit || 'L';
     const customIncLakhs = customUnit === 'Cr' ? customInc * 100 : customInc;
-    
     const inc1 = customIncLakhs;
     const inc2 = customIncLakhs * 2;
     const inc3 = customIncLakhs * 5;
@@ -1043,15 +965,9 @@ function renderLiveBiddingArena() {
             </div>
 
             <div class="bid-buttons">
-                <button class="bid-btn custom" onclick="window.addBid(${inc1})">
-                    + ${formatMoneyShort(inc1)}
-                </button>
-                <button class="bid-btn" onclick="window.addBid(${inc2})">
-                    + ${formatMoneyShort(inc2)}
-                </button>
-                <button class="bid-btn" onclick="window.addBid(${inc3})">
-                    + ${formatMoneyShort(inc3)}
-                </button>
+                <button class="bid-btn custom" onclick="window.addBid(${inc1})">+ ${formatMoneyShort(inc1)}</button>
+                <button class="bid-btn" onclick="window.addBid(${inc2})">+ ${formatMoneyShort(inc2)}</button>
+                <button class="bid-btn" onclick="window.addBid(${inc3})">+ ${formatMoneyShort(inc3)}</button>
             </div>
 
             <div class="team-selector">
@@ -1106,7 +1022,6 @@ function renderLiveBiddingArena() {
 window.updateCustomIncrement = function() {
     const value = parseFloat(document.getElementById('customIncrement').value) || 10;
     const unit = document.getElementById('customIncrementUnit').value;
-    
     AppState.data.customIncrement = value;
     AppState.data.customIncrementUnit = unit;
     saveData();
@@ -1115,7 +1030,6 @@ window.updateCustomIncrement = function() {
 
 window.startBidding = function(e) {
     e.preventDefault();
-    
     const name = document.getElementById('bidPlayerName').value.trim();
     const role = document.getElementById('bidPlayerRole').value;
     const basePriceValue = parseFloat(document.getElementById('bidBasePrice').value);
@@ -1127,7 +1041,6 @@ window.startBidding = function(e) {
     }
     
     const basePriceLakhs = parseAmountToLakhs(basePriceValue, basePriceUnit);
-    
     AppState.data.liveBidding = {
         playerName: name,
         role: role,
@@ -1138,7 +1051,6 @@ window.startBidding = function(e) {
         status: 'active',
         startTime: new Date().toISOString()
     };
-    
     saveData();
     renderAdminView();
     showToast(`Bidding started for ${name}! 🔥`);
@@ -1147,13 +1059,11 @@ window.startBidding = function(e) {
 window.setBidder = function(teamName) {
     const bid = AppState.data.liveBidding;
     if (!bid || bid.status !== 'active') return;
-    
     const stats = getTeamStats(teamName);
     if (stats.remaining < bid.currentBid) {
         showToast(`${teamName} doesn't have enough purse!`, 'error');
         return;
     }
-    
     bid.currentBidder = teamName;
     saveData();
     renderAdminView();
@@ -1191,7 +1101,6 @@ window.addBid = function(incrementLakhs) {
         timestamp: new Date().toISOString()
     });
     bid.currentBid = newAmount;
-    
     saveData();
     renderAdminView();
     showToast(`Bid: ${formatBidAmount(newAmount)} by ${bid.currentBidder} 📈`);
@@ -1203,9 +1112,7 @@ window.undoBid = function() {
         showToast('Nothing to undo!', 'error');
         return;
     }
-    
     bid.bidHistory.pop();
-    
     if (bid.bidHistory.length > 0) {
         const last = bid.bidHistory[bid.bidHistory.length - 1];
         bid.currentBid = last.amount;
@@ -1214,7 +1121,6 @@ window.undoBid = function() {
         bid.currentBid = bid.basePrice;
         bid.currentBidder = null;
     }
-    
     saveData();
     renderAdminView();
     showToast('Last bid undone! ↶');
@@ -1229,7 +1135,6 @@ window.completeBid = function(status) {
             showToast('No bidder selected!', 'error');
             return;
         }
-        
         AppState.data.players.push({
             id: Date.now(),
             name: bid.playerName,
@@ -1239,23 +1144,18 @@ window.completeBid = function(status) {
             timestamp: new Date().toISOString(),
             addedBy: 'auction'
         });
-        
         bid.status = 'sold';
         bid.finalTeam = bid.currentBidder;
         bid.finalPrice = bid.currentBid;
-        
         AppState.data.biddingHistory = AppState.data.biddingHistory || [];
         AppState.data.biddingHistory.push({...bid});
-        
         saveData();
         renderAdminView();
         showToast(`${bid.playerName} SOLD to ${bid.currentBidder} for ${formatBidAmount(bid.currentBid)}! 🎉`);
     } else {
         bid.status = 'unsold';
-        
         AppState.data.biddingHistory = AppState.data.biddingHistory || [];
         AppState.data.biddingHistory.push({...bid});
-        
         saveData();
         renderAdminView();
         showToast(`${bid.playerName} went UNSOLD ❌`);
@@ -1269,7 +1169,6 @@ window.viewTeamDetails = function(teamName) {
     
     const stats = getTeamStats(teamName);
     const players = stats.players;
-    
     const batsmen = players.filter(p => p.role === 'Batsman');
     const bowlers = players.filter(p => p.role === 'Bowler');
     const allRounders = players.filter(p => p.role === 'All-Rounder');
@@ -1315,7 +1214,6 @@ window.viewTeamDetails = function(teamName) {
                 <div class="stat-value" style="font-size: 1.2rem;">${stats.playerCount}</div>
             </div>
         </div>
-        
         ${players.length === 0 ? `
             <div class="empty-state" style="padding: 2rem;">
                 <div class="empty-icon">🏏</div>
@@ -1346,7 +1244,6 @@ function renderOwnerView() {
                     </div>
                 </div>
             </div>
-        
             ${renderSyncIndicator()}
         `;
         return;
@@ -1440,7 +1337,6 @@ function renderOwnerView() {
                 </div>
             </div>
         </div>
-        
         ${renderSyncIndicator()}
     `;
 }
@@ -1455,7 +1351,6 @@ function renderOwnerAccessCard(teamName, accessReq) {
             </div>
         `;
     }
-    
     if (accessReq.status === 'pending') {
         return `
             <div class="access-card pending">
@@ -1465,7 +1360,6 @@ function renderOwnerAccessCard(teamName, accessReq) {
             </div>
         `;
     }
-    
     if (accessReq.status === 'approved') {
         return `
             <div class="access-card approved">
@@ -1474,7 +1368,6 @@ function renderOwnerAccessCard(teamName, accessReq) {
             </div>
         `;
     }
-    
     return `
         <div class="access-card denied">
             <div class="access-card-title">❌ Access Denied</div>
@@ -1486,9 +1379,7 @@ function renderOwnerAccessCard(teamName, accessReq) {
 
 function renderOwnerLiveBid(bid, teamName, stats) {
     if (!bid || bid.status !== 'active') return '';
-    
     const canBid = stats.remaining >= bid.currentBid;
-    
     return `
         <div class="bidding-arena ${bid.currentBidder === teamName ? 'active' : ''}">
             <div class="player-spotlight">
@@ -1496,7 +1387,6 @@ function renderOwnerLiveBid(bid, teamName, stats) {
                 <div class="player-role-big">${escapeHtml(bid.role)}</div>
                 <span class="base-price-tag">Base: ${formatBidAmount(parseFloat(bid.basePrice))}</span>
             </div>
-
             <div class="current-bid-box">
                 <div class="current-bid-label">Current Bid</div>
                 <div class="current-bid-amount">${formatBidAmount(parseFloat(bid.currentBid))}</div>
@@ -1504,7 +1394,6 @@ function renderOwnerLiveBid(bid, teamName, stats) {
                     ${bid.currentBidder ? `🏏 ${escapeHtml(bid.currentBidder)} ${bid.currentBidder === teamName ? '(YOU)' : ''}` : 'Waiting...'}
                 </div>
             </div>
-
             <div style="text-align: center; padding: 1rem; background: ${canBid ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border-radius: 10px;">
                 <div style="color: ${canBid ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">
                     ${canBid ? '✓ You can bid on this player!' : '✗ Insufficient purse for this bid'}
@@ -1558,7 +1447,6 @@ function renderOwnerAddPlayer(teamName, remaining) {
 
 function renderOwnerSquad(players, title, canEdit) {
     if (players.length === 0) return '';
-    
     return `
         <h4 style="color: var(--primary); margin: 1.5rem 0 0.75rem 0;">${title} (${players.length})</h4>
         <div class="table-container">
@@ -1591,19 +1479,17 @@ function renderOwnerSquad(players, title, canEdit) {
 
 // ==================== OWNER ACTIONS ====================
 window.requestAccess = requestAccess;
+
 window.addPlayerAsOwner = function(e, teamName) {
     e.preventDefault();
-    
     if (!AppState.user || AppState.user.role !== 'owner' || AppState.user.team !== teamName) {
         showToast('Unauthorized!', 'error');
         return;
     }
-    
     if (!hasAccess(teamName)) {
         showToast('No edit access!', 'error');
         return;
     }
-    
     const name = document.getElementById('ownerPlayerName').value.trim();
     const priceValue = parseFloat(document.getElementById('ownerPlayerPrice').value);
     const priceUnit = document.getElementById('ownerPlayerPriceUnit').value;
@@ -1631,7 +1517,6 @@ window.addPlayerAsOwner = function(e, teamName) {
         timestamp: new Date().toISOString(),
         addedBy: 'owner'
     });
-    
     saveData();
     showToast(`${name} added for ${formatMoney(priceLakhs)}! 🎉`);
     AppState.isInteracting = false;
@@ -1641,26 +1526,21 @@ window.addPlayerAsOwner = function(e, teamName) {
 window.confirmDeletePlayerAsOwner = function(playerId) {
     const player = AppState.data.players.find(p => p.id === playerId);
     if (!player) return;
-    
     if (!confirm(`Delete ${player.name}? This cannot be undone.`)) return;
-    
     deletePlayerAsOwner(playerId);
 };
 
 function deletePlayerAsOwner(playerId) {
     const player = AppState.data.players.find(p => p.id === playerId);
     if (!player) return;
-    
     if (!AppState.user || AppState.user.role !== 'owner' || AppState.user.team !== player.team) {
         showToast('Unauthorized!', 'error');
         return;
     }
-    
     if (!hasAccess(AppState.user.team)) {
         showToast('No edit access!', 'error');
         return;
     }
-    
     AppState.data.players = AppState.data.players.filter(p => p.id !== playerId);
     saveData();
     showToast(`${player.name} deleted!`);
@@ -1670,12 +1550,10 @@ function deletePlayerAsOwner(playerId) {
 window.editPlayerRoleAsOwner = function(playerId) {
     const player = AppState.data.players.find(p => p.id === playerId);
     if (!player) return;
-    
     if (!AppState.user || AppState.user.role !== 'owner' || AppState.user.team !== player.team || !hasAccess(AppState.user.team)) {
         showToast('Unauthorized!', 'error');
         return;
     }
-    
     openModal('Change Role', `
         <form onsubmit="window.updatePlayerRoleOwner(event, ${playerId})">
             <p style="margin-bottom: 1rem;"><strong>${escapeHtml(player.name)}</strong></p>
@@ -1695,14 +1573,12 @@ window.editPlayerRoleAsOwner = function(playerId) {
 
 window.updatePlayerRoleOwner = function(e, playerId) {
     e.preventDefault();
-    
     const player = AppState.data.players.find(p => p.id === playerId);
     if (!player || !AppState.user || AppState.user.team !== player.team || !hasAccess(AppState.user.team)) {
         showToast('Unauthorized!', 'error');
         closeModal();
         return;
     }
-    
     player.role = document.getElementById('ownerNewRole').value;
     saveData();
     closeModal();
@@ -1713,7 +1589,6 @@ window.updatePlayerRoleOwner = function(e, playerId) {
 // ==================== DISPLAY VIEW ====================
 function renderDisplayView() {
     const bid = AppState.data.liveBidding;
-    
     document.getElementById('app').innerHTML = `
         <div class="display-view">
             <div class="display-header">
@@ -1728,7 +1603,6 @@ function renderDisplayView() {
                     LIVE
                 </span>
             </div>
-
             <div class="container">
                 ${bid && bid.status === 'active' ? renderDisplayBidding(bid) : ''}
                 ${renderStatsGrid()}
@@ -1737,7 +1611,6 @@ function renderDisplayView() {
                 ${renderRecentPurchases()}
             </div>
         </div>
-    
         ${renderSyncIndicator()}
     `;
 }
@@ -1750,7 +1623,6 @@ function renderDisplayBidding(bid) {
                 <div class="player-role-big">${escapeHtml(bid.role)}</div>
                 <span class="base-price-tag">Base: ${formatBidAmount(parseFloat(bid.basePrice))}</span>
             </div>
-
             <div class="current-bid-box">
                 <div class="current-bid-label">Current Bid</div>
                 <div class="current-bid-amount">${formatBidAmount(parseFloat(bid.currentBid))}</div>
@@ -1774,7 +1646,6 @@ function renderDisplayTeams() {
             </div>
         `;
     }
-    
     return `
         <div class="card">
             <div class="card-header">🏏 Team Standings</div>
@@ -1782,14 +1653,9 @@ function renderDisplayTeams() {
                 ${AppState.data.teams.map(team => {
                     const stats = getTeamStats(team.name);
                     const logoUrl = getTeamLogo(team.name);
-                    
                     return `
                         <div class="team-card">
-                            ${logoUrl ? `
-                                <div class="team-logo-container">
-                                    <img src="${logoUrl}" alt="${escapeHtml(team.name)}" class="team-logo" onerror="this.style.display='none'">
-                                </div>
-                            ` : ''}
+                            ${logoUrl ? `<div class="team-logo-container"><img src="${logoUrl}" alt="${escapeHtml(team.name)}" class="team-logo" onerror="this.style.display='none'"></div>` : ''}
                             <div class="team-name">${escapeHtml(team.name)}</div>
                             <div class="team-stats">
                                 <div class="team-stat-row">
@@ -1825,9 +1691,7 @@ function renderRecentPurchases() {
             </div>
         `;
     }
-    
     const recent = [...AppState.data.players].reverse().slice(0, 8);
-    
     return `
         <div class="card">
             <div class="card-header">⚡ Recent Purchases</div>
@@ -1860,7 +1724,6 @@ function renderRecentPurchases() {
 // ==================== ADMIN CRUD ====================
 window.addTeam = function(e) {
     e.preventDefault();
-    
     const name = document.getElementById('teamName').value.trim();
     const purseValue = parseFloat(document.getElementById('teamPurse').value);
     const purseUnit = document.getElementById('teamPurseUnit').value;
@@ -1870,17 +1733,14 @@ window.addTeam = function(e) {
         showToast('Fill all fields correctly!', 'error');
         return;
     }
-    
     if (AppState.data.teams.find(t => t.name.toLowerCase() === name.toLowerCase())) {
         showToast('Team already exists!', 'error');
         return;
     }
     
     const purseLakhs = parseAmountToLakhs(purseValue, purseUnit);
-    
     AppState.data.teams.push({ name, initialPurse: purseLakhs });
     AppState.data.teamPasswords[name] = password;
-    
     saveData();
     showToast(`${name} added with ${formatMoney(purseLakhs)} purse! 🎉`);
     AppState.isInteracting = false;
@@ -1897,7 +1757,6 @@ function deleteTeam(teamName) {
     AppState.data.players = AppState.data.players.filter(p => p.team !== teamName);
     delete AppState.data.teamPasswords[teamName];
     if (AppState.data.accessRequests) delete AppState.data.accessRequests[teamName];
-    
     saveData();
     showToast(`${teamName} deleted!`);
     renderAdminView();
@@ -1906,7 +1765,6 @@ function deleteTeam(teamName) {
 window.confirmDeletePlayer = function(playerId) {
     const player = AppState.data.players.find(p => p.id === playerId);
     if (!player) return;
-    
     if (!confirm(`Delete ${player.name}? This cannot be undone.`)) return;
     deletePlayer(playerId);
 };
@@ -1914,7 +1772,6 @@ window.confirmDeletePlayer = function(playerId) {
 function deletePlayer(playerId) {
     const player = AppState.data.players.find(p => p.id === playerId);
     if (!player) return;
-    
     AppState.data.players = AppState.data.players.filter(p => p.id !== playerId);
     saveData();
     showToast(`${player.name} deleted!`);
@@ -1924,7 +1781,6 @@ function deletePlayer(playerId) {
 window.editPlayerRole = function(playerId) {
     const player = AppState.data.players.find(p => p.id === playerId);
     if (!player) return;
-    
     openModal('Change Role', `
         <form onsubmit="window.updatePlayerRole(event, ${playerId})">
             <p style="margin-bottom: 1rem;"><strong>${escapeHtml(player.name)}</strong></p>
@@ -1944,7 +1800,6 @@ window.editPlayerRole = function(playerId) {
 
 window.updatePlayerRole = function(e, playerId) {
     e.preventDefault();
-    
     const player = AppState.data.players.find(p => p.id === playerId);
     if (player) {
         player.role = document.getElementById('newRole').value;
@@ -1972,7 +1827,6 @@ function resetAll() {
         customIncrement: 10,
         customIncrementUnit: 'L'
     };
-    
     saveData();
     showToast('All data reset! 🔄');
     renderAdminView();
@@ -1981,18 +1835,15 @@ function resetAll() {
 // ==================== EXPORT ====================
 window.exportToCSV = function() {
     let csv = `IPL AUCTION ${CONFIG.YEAR} - IILM University Greater Noida\n\n`;
-    
     csv += 'TEAMS\nName,Initial Purse,Spent,Remaining,Players\n';
     AppState.data.teams.forEach(t => {
         const s = getTeamStats(t.name);
         csv += `${t.name},${formatMoney(s.initialPurse)},${formatMoney(s.spent)},${formatMoney(s.remaining)},${s.playerCount}\n`;
     });
-    
     csv += '\nPLAYERS\nName,Team,Role,Price,Added By\n';
     AppState.data.players.forEach(p => {
         csv += `${p.name},${p.team},${p.role},${formatMoney(parseFloat(p.price))},${p.addedBy || 'admin'}\n`;
     });
-    
     csv += `\nSTATS\nTotal Spent,${calculateTotalSpent()}\nPlayers Sold,${AppState.data.players.length}\nHighest Bid,${getHighestBid()}\n`;
     
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -2000,7 +1851,6 @@ window.exportToCSV = function() {
     a.href = URL.createObjectURL(blob);
     a.download = `IPL_Auction_IILM_${CONFIG.YEAR}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-    
     showToast('CSV exported! 📥');
 };
 
@@ -2009,10 +1859,8 @@ function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     const msg = document.getElementById('toastMessage');
     if (!toast || !msg) return;
-    
     msg.textContent = message;
     toast.className = `toast ${type} show`;
-    
     setTimeout(() => {
         toast.classList.remove('show');
     }, 3000);
