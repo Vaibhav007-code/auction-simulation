@@ -1,17 +1,102 @@
-// ==================== CONFIGURATION ====================
+// ==================== FIREBASE CONFIGURATION ====================
+const firebaseConfig = {
+  apiKey: "AIzaSyAPz8Z5IPeUlQN5fwZ27DOtSAyRy3SOTms",
+  authDomain: "pro-equinox-427705-a0.firebaseapp.com",
+  databaseURL: "https://pro-equinox-427705-a0-default-rtdb.firebaseio.com",
+  projectId: "pro-equinox-427705-a0",
+  storageBucket: "pro-equinox-427705-a0.firebasestorage.app",
+  messagingSenderId: "625384703554",
+  appId: "1:625384703554:web:eff89db7b1ff32f22ecfdb",
+  measurementId: "G-VNE8ER3BCL"
+};
+
+let database = null;
+let dataRef = null;
+let firebaseReady = false;
+
+// ==================== FIREBASE INITIALIZATION ====================
+async function initFirebase() {
+    try {
+        console.log('📦 Loading Firebase...');
+        await loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
+        await loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js');
+        
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        database = firebase.database();
+        dataRef = database.ref('auctionData');
+        firebaseReady = true;
+        
+        console.log('✅ Firebase connected successfully!');
+        
+        // Listen for real-time updates
+        dataRef.on('value', (snapshot) => {
+            const cloudData = snapshot.val();
+            if (cloudData && !AppState.isInteracting && !AppState.isModalOpen) {
+                console.log('📡 Real-time update from Firebase');
+                const hasChanges = JSON.stringify(AppState.data) !== JSON.stringify(cloudData);
+                
+                if (hasChanges) {
+                    AppState.data = { ...AppState.data, ...cloudData };
+                    localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(cloudData));
+                    
+                    const view = getViewFromURL();
+                    if (view === 'display') {
+                        renderDisplayView();
+                    } else if (AppState.user && AppState.user.role === 'owner') {
+                        renderOwnerView();
+                    }
+                }
+            }
+        });
+        
+        // Load initial data
+        const snapshot = await dataRef.once('value');
+        const firebaseData = snapshot.val();
+        if (firebaseData) {
+            console.log('📥 Initial data loaded from Firebase');
+            AppState.data = { ...AppState.data, ...firebaseData };
+            localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(firebaseData));
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('❌ Firebase error:', error);
+        firebaseReady = false;
+        showToast('Running in offline mode', 'error');
+        return false;
+    }
+}
+
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => {
+            console.log(`✅ Loaded: ${src}`);
+            resolve();
+        };
+        script.onerror = () => {
+            console.error(`❌ Failed to load: ${src}`);
+            reject(new Error(`Failed to load ${src}`));
+        };
+        document.head.appendChild(script);
+    });
+}
+
 const CONFIG = {
     ADMIN_PASSWORD: 'admin2026',
     AUTO_REFRESH_INTERVAL: 2000,
     YEAR: '2026',
     STORAGE_KEY: 'iplAuction2026_v3',
-    SESSION_KEY: 'iplUser2026_v3',
-    SYNC_KEY: 'iplAuctionSync2026',
-    ROOM_ID: 'iilm-ipl-auction-2026' // Unique room for your event
+    SESSION_KEY: 'iplUser2026_v3'
 };
 
 // ==================== TEAM LOGOS ====================
 const TEAM_LOGOS = {
-    // IPL Teams with official logos
+    // IPL Teams with official logos (FIXED Mumbai Indians URL)
     'Mumbai Indians': 'https://bcciplayerimages.s3.ap-south-1.amazonaws.com/ipl/MI/Logos/Logooutline/MIoutline.png',
     'Chennai Super Kings': 'https://documents.iplt20.com/ipl/CSK/Logos/Logooutline/CSKoutline.png',
     'Royal Challengers Bangalore': 'https://documents.iplt20.com/ipl/RCB/Logos/Logooutline/RCBoutline.png',
@@ -66,111 +151,6 @@ function getTeamLogo(teamName) {
     
     return partialMatch ? TEAM_LOGOS[partialMatch] : null;
 }
-
-// ==================== REAL-TIME SYNC SYSTEM ====================
-class SyncManager {
-    constructor() {
-        this.channel = null;
-        this.isAdmin = false;
-        this.syncEnabled = true;
-        this.lastSyncTime = Date.now();
-        this.initSync();
-    }
-    
-    initSync() {
-        // BroadcastChannel for same-origin tab sync
-        if (typeof BroadcastChannel !== 'undefined') {
-            try {
-                this.channel = new BroadcastChannel(CONFIG.SYNC_KEY);
-                this.channel.onmessage = (event) => this.handleSyncMessage(event.data);
-                console.log('✅ BroadcastChannel sync initialized');
-            } catch (e) {
-                console.log('BroadcastChannel not available:', e);
-            }
-        }
-        
-        // localStorage event listener for cross-tab sync (fallback)
-        window.addEventListener('storage', (e) => {
-            if (e.key === CONFIG.STORAGE_KEY && e.newValue) {
-                this.handleStorageSync(e.newValue);
-            }
-        });
-        
-        // Periodic sync check
-        setInterval(() => this.checkForUpdates(), 3000);
-        
-        console.log('✅ Sync system initialized');
-    }
-    
-    handleSyncMessage(data) {
-        if (data.type === 'data_update' && data.timestamp > this.lastSyncTime) {
-            console.log('📡 Received sync update from another tab');
-            this.lastSyncTime = data.timestamp;
-            AppState.data = { ...AppState.data, ...data.payload };
-            
-            // Re-render if not interacting
-            if (!AppState.isInteracting && !AppState.isModalOpen) {
-                const view = getViewFromURL();
-                if (view === 'display') {
-                    renderDisplayView();
-                } else if (AppState.user && AppState.user.role === 'owner') {
-                    renderOwnerView();
-                }
-            }
-        }
-    }
-    
-    handleStorageSync(newValue) {
-        try {
-            const newData = JSON.parse(newValue);
-            console.log('📡 Received localStorage sync');
-            AppState.data = { ...AppState.data, ...newData };
-            
-            if (!AppState.isInteracting && !AppState.isModalOpen) {
-                const view = getViewFromURL();
-                if (view === 'display') {
-                    renderDisplayView();
-                } else if (AppState.user && AppState.user.role === 'owner') {
-                    renderOwnerView();
-                }
-            }
-        } catch (e) {
-            console.error('Storage sync error:', e);
-        }
-    }
-    
-    checkForUpdates() {
-        // Reload data from localStorage periodically
-        loadDataSilent();
-    }
-    
-    broadcast(data) {
-        if (!this.syncEnabled) return;
-        
-        const message = {
-            type: 'data_update',
-            timestamp: Date.now(),
-            payload: data
-        };
-        
-        // Broadcast via BroadcastChannel
-        if (this.channel) {
-            try {
-                this.channel.postMessage(message);
-                console.log('📤 Broadcasted update');
-            } catch (e) {
-                console.error('Broadcast error:', e);
-            }
-        }
-    }
-    
-    setAdmin(isAdmin) {
-        this.isAdmin = isAdmin;
-    }
-}
-
-// Initialize sync manager
-const syncManager = new SyncManager();
 
 // ==================== STATE MANAGEMENT ====================
 const AppState = {
@@ -285,18 +265,11 @@ function getIncrementDisplay(value, unit) {
 }
 
 // ==================== INITIALIZATION ====================
-function init() {
+async function init() {
     createParticles();
     loadData();
+    await initFirebase();
     checkAuth();
-    
-    // Show sync indicator
-    showSyncStatus();
-}
-
-function showSyncStatus() {
-    console.log('🔄 Real-time sync active');
-    console.log('📡 All devices will sync automatically');
 }
 
 function createParticles() {
@@ -338,41 +311,17 @@ function loadData() {
     }
 }
 
-function loadDataSilent() {
-    try {
-        const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            const hasChanges = JSON.stringify(AppState.data) !== JSON.stringify(parsed);
-            
-            if (hasChanges) {
-                AppState.data = { ...AppState.data, ...parsed };
-                
-                // Auto-refresh view if not interacting
-                if (!AppState.isInteracting && !AppState.isModalOpen) {
-                    const view = getViewFromURL();
-                    if (view === 'display') {
-                        renderDisplayView();
-                    } else if (AppState.user && AppState.user.role === 'owner') {
-                        renderOwnerView();
-                    }
-                }
-            }
-        }
-    } catch (e) {
-        // Silent fail
-    }
-}
-
-function saveData() {
+// ==================== FIXED: Removed duplicate catch block ====================
+async function saveData() {
     try {
         const dataToSave = JSON.stringify(AppState.data);
         localStorage.setItem(CONFIG.STORAGE_KEY, dataToSave);
+        console.log('💾 Saved to localStorage');
         
-        // Broadcast to other tabs/devices
-        syncManager.broadcast(AppState.data);
-        
-        console.log('💾 Data saved and broadcasted');
+        if (firebaseReady && dataRef) {
+            await dataRef.set(AppState.data);
+            console.log('☁️ Synced to Firebase!');
+        }
     } catch (e) {
         console.error('Error saving data:', e);
         showToast('Error saving data!', 'error');
@@ -385,7 +334,6 @@ function checkAuth() {
         const savedUser = sessionStorage.getItem(CONFIG.SESSION_KEY);
         if (savedUser) {
             AppState.user = JSON.parse(savedUser);
-            syncManager.setAdmin(AppState.user.role === 'admin');
             renderApp();
         } else {
             renderLogin();
@@ -400,7 +348,6 @@ function login(role, password, teamName = null) {
         if (password === CONFIG.ADMIN_PASSWORD) {
             AppState.user = { role: 'admin' };
             sessionStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(AppState.user));
-            syncManager.setAdmin(true);
             showToast('Welcome Admin! 🎉');
             renderApp();
             return true;
@@ -413,7 +360,6 @@ function login(role, password, teamName = null) {
         if (teamPassword && teamPassword === password) {
             AppState.user = { role: 'owner', team: teamName };
             sessionStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(AppState.user));
-            syncManager.setAdmin(false);
             showToast(`Welcome ${teamName}! 🏏`);
             renderApp();
             return true;
@@ -428,7 +374,6 @@ function login(role, password, teamName = null) {
 function logout() {
     sessionStorage.removeItem(CONFIG.SESSION_KEY);
     AppState.user = null;
-    syncManager.setAdmin(false);
     stopAutoRefresh();
     showToast('Logged out successfully!');
     renderLogin();
@@ -565,7 +510,16 @@ function startAutoRefresh() {
             return;
         }
         
-        loadDataSilent();
+        loadData();
+        const view = getViewFromURL();
+        if (view === 'display') {
+            renderDisplayView();
+        } else if (AppState.user && AppState.user.role === 'owner') {
+            const activeElement = document.activeElement;
+            if (!activeElement || (activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'SELECT' && activeElement.tagName !== 'TEXTAREA')) {
+                renderOwnerView();
+            }
+        }
     }, CONFIG.AUTO_REFRESH_INTERVAL);
 }
 
@@ -585,12 +539,13 @@ function switchView(view) {
     window.location.href = `?view=${view}`;
 }
 
+
 // ==================== SYNC STATUS INDICATOR ====================
 function renderSyncIndicator() {
     return `
-        <div style="position: fixed; bottom: 20px; right: 20px; background: rgba(20, 184, 166, 0.9); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 8px;">
-            <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite;"></span>
-            <span>Live Sync Active</span>
+        <div style="position: fixed; bottom: 20px; right: 20px; background: ${firebaseReady ? 'rgba(34, 197, 94, 0.9)' : 'rgba(251, 146, 60, 0.9)'}; color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 8px;">
+            <span style="width: 8px; height: 8px; background: ${firebaseReady ? '#22c55e' : '#fbbf24'}; border-radius: 50%; animation: pulse 2s infinite;"></span>
+            <span>${firebaseReady ? '🔥 Live Sync Active' : '⚠️ Offline Mode'}</span>
         </div>
         <style>
             @keyframes pulse {
@@ -618,7 +573,7 @@ function renderLogin() {
                 <div class="ipl-logo-container">
                     <img src="${IPL_LOGO}" alt="IPL Logo" class="ipl-logo">
                 </div>
-                <div class="login-title">🏏 IPL AUCTION ${CONFIG.YEAR}</div>
+                <div class="login-title">🏆 IPL AUCTION ${CONFIG.YEAR}</div>
                 <p class="login-subtitle">Secure Access Portal</p>
                 
                 <div class="tab-container">
@@ -668,9 +623,12 @@ function renderLogin() {
                 </div>
             </div>
         </div>
+    
+        ${renderSyncIndicator()}
     `;
 }
 
+// FIXED: Added window. prefix to make functions globally accessible
 window.switchLoginTab = function(tab) {
     document.getElementById('adminTabBtn').classList.toggle('active', tab === 'admin');
     document.getElementById('ownerTabBtn').classList.toggle('active', tab === 'owner');
@@ -731,6 +689,7 @@ function renderAdminView() {
             ${renderAllPlayers()}
             ${renderDangerZone()}
         </div>
+    
         ${renderSyncIndicator()}
     `;
 }
@@ -1387,6 +1346,8 @@ function renderOwnerView() {
                     </div>
                 </div>
             </div>
+        
+            ${renderSyncIndicator()}
         `;
         return;
     }
@@ -1479,6 +1440,7 @@ function renderOwnerView() {
                 </div>
             </div>
         </div>
+        
         ${renderSyncIndicator()}
     `;
 }
@@ -1775,6 +1737,7 @@ function renderDisplayView() {
                 ${renderRecentPurchases()}
             </div>
         </div>
+    
         ${renderSyncIndicator()}
     `;
 }
