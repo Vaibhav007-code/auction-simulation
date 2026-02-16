@@ -1,13 +1,13 @@
 // ==================== FIREBASE CONFIGURATION ====================
 const firebaseConfig = {
-  apiKey: "AIzaSyAPz8Z5IPeUlQN5fwZ27DOtSAyRy3SOTms",
-  authDomain: "pro-equinox-427705-a0.firebaseapp.com",
-  databaseURL: "https://pro-equinox-427705-a0-default-rtdb.firebaseio.com",
-  projectId: "pro-equinox-427705-a0",
-  storageBucket: "pro-equinox-427705-a0.firebasestorage.app",
-  messagingSenderId: "625384703554",
-  appId: "1:625384703554:web:eff89db7b1ff32f22ecfdb",
-  measurementId: "G-VNE8ER3BCL"
+    apiKey: "AIzaSyAPz8Z5IPeUlQN5fwZ27DOtSAyRy3SOTms",
+    authDomain: "pro-equinox-427705-a0.firebaseapp.com",
+    databaseURL: "https://pro-equinox-427705-a0-default-rtdb.firebaseio.com",
+    projectId: "pro-equinox-427705-a0",
+    storageBucket: "pro-equinox-427705-a0.firebasestorage.app",
+    messagingSenderId: "625384703554",
+    appId: "1:625384703554:web:eff89db7b1ff32f22ecfdb",
+    measurementId: "G-VNE8ER3BCL"
 };
 
 let database = null;
@@ -445,9 +445,9 @@ function revokeAccess(teamName) {
 }
 
 function hasAccess(teamName) {
-    return AppState.data.accessRequests && 
-           AppState.data.accessRequests[teamName] && 
-           AppState.data.accessRequests[teamName].status === 'approved';
+    return AppState.data.accessRequests &&
+        AppState.data.accessRequests[teamName] &&
+        AppState.data.accessRequests[teamName].status === 'approved';
 }
 
 function getPendingRequests() {
@@ -474,7 +474,7 @@ function escapeHtml(text) {
 
 function escapeAttr(text) {
     if (!text) return '';
-    return text.replace(/'/g, '&apos;').replace(/"/g, '&quot;');
+    return text.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 
 function getTeamStats(teamName) {
@@ -573,7 +573,7 @@ function renderLogin() {
     const teamsOptions = teams.map(t => 
         `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`
     ).join('');
-    
+
     const noTeamsMessage = teams.length === 0 ? `
         <div style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; text-align: center;">
             <div style="color: var(--warning); font-weight: 600;">⚠️ No Teams Available</div>
@@ -848,7 +848,7 @@ function renderAddTeamForm() {
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Team Name</label>
-                        <input type="text" class="form-input" id="teamName" required placeholder="e.g., Mumbai Indians" 
+                        <input type="text" class="form-input" id="teamName" required placeholder="e.g., Mumbai Indians"
                             onfocus="AppState.isInteracting = true" onblur="AppState.isInteracting = false">
                     </div>
                     <div class="form-group">
@@ -928,7 +928,7 @@ function renderTeamsOverview() {
             </div>
         `;
     }).join('');
-    
+
     return `
         <div class="card">
             <div class="card-header">🏏 Teams Overview (${AppState.data.teams.length})</div>
@@ -1045,14 +1045,14 @@ function renderLiveBiddingArena() {
             </div>
         `;
     }
-    
+
     const customInc = AppState.data.customIncrement || 10;
     const customUnit = AppState.data.customIncrementUnit || 'L';
     const customIncLakhs = customUnit === 'Cr' ? customInc * 100 : customInc;
     const inc1 = customIncLakhs;
     const inc2 = customIncLakhs * 2;
     const inc3 = customIncLakhs * 5;
-    
+
     return `
         <div class="bidding-arena active">
             <div class="player-spotlight">
@@ -1161,7 +1161,7 @@ window.startBidding = function(e) {
         showToast('Please fill all fields correctly!', 'error');
         return;
     }
-    
+
     const basePriceLakhs = parseAmountToLakhs(basePriceValue, basePriceUnit);
     AppState.data.liveBidding = {
         playerName: name,
@@ -1199,7 +1199,7 @@ window.addBid = function(incrementLakhs) {
         showToast('Select a team first!', 'error');
         return;
     }
-    
+
     if (bid.bidHistory && bid.bidHistory.length > 0) {
         const lastBid = bid.bidHistory[bid.bidHistory.length - 1];
         if (lastBid.team === bid.currentBidder) {
@@ -1207,15 +1207,15 @@ window.addBid = function(incrementLakhs) {
             return;
         }
     }
-    
+
     const newAmount = parseFloat(bid.currentBid) + parseFloat(incrementLakhs);
     const stats = getTeamStats(bid.currentBidder);
-    
+
     if (newAmount > stats.remaining) {
         showToast(`${bid.currentBidder} can't afford this bid!`, 'error');
         return;
     }
-    
+
     bid.bidHistory = bid.bidHistory || [];
     bid.bidHistory.push({
         team: bid.currentBidder,
@@ -1295,7 +1295,7 @@ window.viewTeamDetails = function(teamName) {
     const bowlers = players.filter(p => p.role === 'Bowler');
     const allRounders = players.filter(p => p.role === 'All-Rounder');
     const wicketKeepers = players.filter(p => p.role === 'Wicket-Keeper');
-    
+
     const renderRoleSection = (title, list, icon) => {
         if (list.length === 0) return '';
         return `
@@ -1312,7 +1312,7 @@ window.viewTeamDetails = function(teamName) {
             </div>
         `;
     };
-    
+
     openModal(`${teamName} - Team Details`, `
         <div class="stats-grid" style="margin-bottom: 1.5rem;">
             <div class="stat-card teal" style="padding: 1rem;">
@@ -1371,18 +1371,20 @@ function renderOwnerView() {
         `;
         return;
     }
-    
+
     const stats = getTeamStats(teamName);
     const accessReq = AppState.data.accessRequests ? AppState.data.accessRequests[teamName] : null;
     const hasAdminAccess = hasAccess(teamName);
     const bid = AppState.data.liveBidding;
     const logoUrl = getTeamLogo(teamName);
-    
-    const batsmen = stats.players.filter(p => p.role === 'Batsman');
-    const bowlers = stats.players.filter(p => p.role === 'Bowler');
-    const allRounders = stats.players.filter(p => p.role === 'All-Rounder');
-    const wicketKeepers = stats.players.filter(p => p.role === 'Wicket-Keeper');
-    
+
+    // CRITICAL FIX: Filter players explicitly by the logged-in team
+    const myPlayers = AppState.data.players.filter(p => p.team === teamName);
+    const batsmen = myPlayers.filter(p => p.role === 'Batsman');
+    const bowlers = myPlayers.filter(p => p.role === 'Bowler');
+    const allRounders = myPlayers.filter(p => p.role === 'All-Rounder');
+    const wicketKeepers = myPlayers.filter(p => p.role === 'Wicket-Keeper');
+
     document.getElementById('app').innerHTML = `
         <header class="header">
             <div class="header-content">
@@ -1430,12 +1432,12 @@ function renderOwnerView() {
                     <div class="stat-card purple">
                         <span class="stat-icon">👥</span>
                         <div class="stat-label">Players</div>
-                        <div class="stat-value">${stats.playerCount}</div>
+                        <div class="stat-value">${myPlayers.length}</div>
                     </div>
                     <div class="stat-card gold">
                         <span class="stat-icon">⭐</span>
                         <div class="stat-label">Top Buy</div>
-                        <div class="stat-value">${stats.players.length > 0 ? formatMoney(Math.max(...stats.players.map(p => parseFloat(p.price)))) : '₹0'}</div>
+                        <div class="stat-value">${myPlayers.length > 0 ? formatMoney(Math.max(...myPlayers.map(p => parseFloat(p.price)))) : '₹0'}</div>
                     </div>
                 </div>
 
@@ -1450,7 +1452,7 @@ function renderOwnerView() {
                     ${renderOwnerSquad(bowlers, '⚡ Bowlers', hasAdminAccess)}
                     ${renderOwnerSquad(allRounders, '💪 All-Rounders', hasAdminAccess)}
                     ${renderOwnerSquad(wicketKeepers, '🧤 Wicket-Keepers', hasAdminAccess)}
-                    ${stats.players.length === 0 ? `
+                    ${myPlayers.length === 0 ? `
                         <div class="empty-state">
                             <div class="empty-icon">🏏</div>
                             <div class="empty-title">No players yet</div>
@@ -1622,15 +1624,15 @@ window.addPlayerAsOwner = function(e, teamName) {
         showToast('Fill all fields correctly!', 'error');
         return;
     }
-    
+
     const priceLakhs = parseAmountToLakhs(priceValue, priceUnit);
     const stats = getTeamStats(teamName);
-    
+
     if (priceLakhs > stats.remaining) {
         showToast('Insufficient purse!', 'error');
         return;
     }
-    
+
     AppState.data.players.push({
         id: Date.now(),
         name,
@@ -1860,14 +1862,14 @@ window.addTeam = function(e) {
         showToast('Team already exists!', 'error');
         return;
     }
-    
+
     const purseLakhs = parseAmountToLakhs(purseValue, purseUnit);
     AppState.data.teams.push({ name, initialPurse: purseLakhs });
     AppState.data.teamPasswords[name] = password;
-    
+
     console.log('✅ Team added:', name, 'Password:', password);
     console.log('📊 Total teams now:', AppState.data.teams.length);
-    
+
     saveData();
     showToast(`${name} added with ${formatMoney(purseLakhs)} purse! 🎉`);
     AppState.isInteracting = false;
